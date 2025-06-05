@@ -3,16 +3,11 @@ import pandas as pd
 import os
 import json
 import time
-import sys
 from pathlib import Path
 
-# Přidání cesty k projektu do PYTHONPATH
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-
 # Import služeb z projektu
-from src.detection.presidio_service import PresidioService
-from src.common.models import Document, BatchProcessingConfig
-from src.batch.parallel_batch_processor import ParallelBatchProcessor
+from presidio_service import PresidioService
+from document import Document, DocumentType, ProcessingStatus
 
 # Konfigurace stránky
 st.set_page_config(
@@ -25,257 +20,201 @@ st.set_page_config(
 # Inicializace služeb
 @st.cache_resource
 def load_presidio_service():
-    return PresidioService()
+    try:
+        return PresidioService()
+    except Exception as e:
+        st.error(f"Chyba při načítání Presidio služby: {e}")
+        return None
 
 # Funkce pro anonymizaci textu
-def anonymize_text(text, language="cs", return_entities=True):
+def anonymize_text(text, language="en"):
+    """Anonymizuje zadaný text."""
     presidio_service = load_presidio_service()
-    document = Document(
-        id="streamlit_input",
-        content=text,
-        content_type="text/plain",
-        language=language
-    )
+    if presidio_service is None:
+        return None
     
-    start_time = time.time()
-    anonymized_document = presidio_service.process_document(document)
-    processing_time = (time.time() - start_time) * 1000  # v ms
-    
-    result = {
-        "anonymized_text": anonymized_document.content,
-        "processing_time_ms": processing_time,
-        "entities": []
-    }
-    
-    if return_entities and anonymized_document.entities:
-        for entity in anonymized_document.entities:
-            result["entities"].append({
-                "start": entity.original_entity.start,
-                "end": entity.original_entity.end,
-                "entity_type": entity.original_entity.entity_type,
-                "score": entity.original_entity.score,
-                "anonymized_value": entity.anonymized_value
-            })
-    
-    return result
-
-# Funkce pro zpracování nahraného souboru
-def process_uploaded_file(uploaded_file, language="cs"):
-    # Vytvoření dočasného adresáře pro zpracování
-    temp_dir = Path("./temp")
-    input_dir = temp_dir / "input"
-    output_dir = temp_dir / "output"
-    error_dir = temp_dir / "error"
-    audit_dir = temp_dir / "audit"
-    
-    for directory in [input_dir, output_dir, error_dir, audit_dir]:
-        directory.mkdir(parents=True, exist_ok=True)
-    
-    # Uložení nahraného souboru
-    file_path = input_dir / uploaded_file.name
-    with open(file_path, "wb") as f:
-        f.write(uploaded_file.getbuffer())
-    
-    # Zpracování souboru
-    presidio_service = load_presidio_service()
-    batch_processor = ParallelBatchProcessor(
-        presidio_service=presidio_service,
-        input_dir=str(input_dir),
-        output_dir=str(output_dir),
-        error_dir=str(error_dir),
-        audit_dir=str(audit_dir),
-        batch_size=1,
-        max_workers=1
-    )
-    
-    stats = batch_processor.process_batch(BatchProcessingConfig(
-        file_pattern="*.*",
-        max_files=1
-    ))
-    
-    # Načtení výsledku
-    output_file = output_dir / uploaded_file.name
-    if output_file.exists():
-        with open(output_file, "r", encoding="utf-8") as f:
-            anonymized_content = f.read()
+    try:
+        # Vytvoření dokumentu podle skutečné struktury
+        document = Document(
+            id="streamlit_input",
+            content=text,
+            content_type="text/plain",
+            document_type=DocumentType.MEDICAL_REPORT,
+            source="streamlit",
+            metadata={},
+            status=ProcessingStatus.PENDING
+        )
         
-        # Načtení metadat
-        metadata_file = Path(str(output_file) + ".meta.json")
-        if metadata_file.exists():
-            with open(metadata_file, "r", encoding="utf-8") as f:
-                metadata = json.load(f)
-        else:
-            metadata = {}
+        start_time = time.time()
+        anonymized_document = presidio_service.process_document(document)
+        processing_time = (time.time() - start_time) * 1000  # v ms
         
         return {
-            "success": True,
-            "anonymized_content": anonymized_content,
-            "metadata": metadata,
-            "stats": stats
+            "anonymized_text": anonymized_document.content,
+            "processing_time_ms": processing_time,
+            "entities": [
+                {
+                    "entity_type": entity.original_entity.entity_type,
+                    "text": entity.original_entity.text,
+                    "anonymized_text": entity.anonymized_text,
+                    "score": entity.original_entity.score,
+                    "start": entity.original_entity.start,
+                    "end": entity.original_entity.end
+                }
+                for entity in anonymized_document.entities
+            ] if anonymized_document.entities else []
         }
-    else:
-        return {
-            "success": False,
-            "error": "Zpracování souboru selhalo",
-            "stats": stats
-        }
-
-# Funkce pro zobrazení statistik
-def display_stats(stats):
-    if not stats:
-        return
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.metric("Zpracované soubory", f"{stats.get('successful_files', 0)}/{stats.get('total_files', 0)}")
-        st.metric("Detekované entity", stats.get('total_entities_detected', 0))
-    
-    with col2:
-        st.metric("Doba zpracování", f"{stats.get('processing_time_ms', 0):.2f} ms")
-        st.metric("Neúspěšné soubory", stats.get('failed_files', 0))
-    
-    if "entities_by_type" in stats and stats["entities_by_type"]:
-        st.subheader("Entity podle typu")
-        entity_data = []
-        for entity_type, count in stats["entities_by_type"].items():
-            entity_data.append({"Typ entity": entity_type, "Počet": count})
-        
-        st.dataframe(pd.DataFrame(entity_data))
+    except Exception as e:
+        st.error(f"Chyba při anonymizaci: {e}")
+        return None
 
 # Funkce pro zobrazení detekovaných entit
 def display_entities(entities):
     if not entities:
+        st.info("Nebyly nalezeny žádné entity k anonymizaci.")
         return
     
-    st.subheader("Detekované entity")
+    st.subheader("Detekované a anonymizované entity")
     
     entity_data = []
     for entity in entities:
         entity_data.append({
-            "Typ": entity["entity_type"],
-            "Text": entity.get("text", ""),
-            "Anonymizovaná hodnota": entity["anonymized_value"],
+            "Typ entity": entity["entity_type"],
+            "Původní text": entity["text"],
+            "Anonymizovaný text": entity["anonymized_text"],
             "Skóre": f"{entity['score']:.2f}",
             "Pozice": f"{entity['start']}-{entity['end']}"
         })
     
-    st.dataframe(pd.DataFrame(entity_data))
+    st.dataframe(pd.DataFrame(entity_data), use_container_width=True)
 
 # Hlavní aplikace
 def main():
     # Sidebar
-    st.sidebar.title("MedDocAI Anonymizer")
-    st.sidebar.image("https://www.stapro.cz/wp-content/uploads/2022/02/logo-stapro.png", width=200)
+    st.sidebar.title("🔒 MedDocAI Anonymizer")
+    st.sidebar.markdown("---")
     
     app_mode = st.sidebar.selectbox(
         "Vyberte režim",
-        ["Anonymizace textu", "Zpracování souboru", "O aplikaci"]
+        ["Anonymizace textu", "O aplikaci"]
     )
     
     # Nastavení
-    with st.sidebar.expander("Nastavení"):
-        language = st.selectbox("Jazyk", ["cs", "en"], index=0)
+    with st.sidebar.expander("⚙️ Nastavení"):
+        language = st.selectbox("Jazyk", ["en", "cs"], index=0, 
+                               help="cs - čeština (experimentální), en - angličtina")
         show_entities = st.checkbox("Zobrazit detekované entity", value=True)
     
     # Anonymizace textu
     if app_mode == "Anonymizace textu":
-        st.title("Anonymizace zdravotnického textu")
-        st.write("Zadejte text, který chcete anonymizovat:")
+        st.title("🏥 Anonymizace zdravotnického textu")
+        st.markdown("Zadejte text, který chcete anonymizovat:")
         
-        text_input = st.text_area("Vstupní text", height=200, 
-                                 value="Pacient Jan Novák, rodné číslo 760506/1234, byl přijat do Fakultní nemocnice v Motole s diagnózou J45.0 (Astma).")
+        # Výběr ukázkového textu
+        sample_texts = {
+            "České ukázka": "Pacient Jan Novák, rodné číslo 760506/1234, byl přijat do Fakultní nemocnice v Motole s diagnózou J45.0 (Astma). Kontakt: jan.novak@email.com, telefon 606 123 456.",
+            "Anglická ukázka": "Patient John Doe, SSN 123-45-6789, was admitted to General Hospital with diagnosis of diabetes. Contact: john.doe@email.com, phone +1-555-123-4567.",
+            "Vlastní text": ""
+        }
         
-        if st.button("Anonymizovat"):
+        selected_sample = st.selectbox("Vyberte ukázkový text nebo zadejte vlastní:", list(sample_texts.keys()))
+        
+        if selected_sample == "Vlastní text":
+            text_input = st.text_area("Vstupní text", height=200, placeholder="Zadejte text k anonymizaci...")
+        else:
+            text_input = st.text_area("Vstupní text", value=sample_texts[selected_sample], height=200)
+        
+        if st.button("🔒 Anonymizovat", type="primary", disabled=not text_input.strip()):
             with st.spinner("Probíhá anonymizace..."):
-                result = anonymize_text(text_input, language, show_entities)
+                result = anonymize_text(text_input, language)
                 
-                st.subheader("Anonymizovaný text")
-                st.text_area("Výstup", result["anonymized_text"], height=200)
-                
-                st.metric("Doba zpracování", f"{result['processing_time_ms']:.2f} ms")
-                
-                if show_entities:
-                    display_entities(result["entities"])
-    
-    # Zpracování souboru
-    elif app_mode == "Zpracování souboru":
-        st.title("Zpracování souboru")
-        st.write("Nahrajte soubor, který chcete anonymizovat:")
-        
-        uploaded_file = st.file_uploader("Vyberte soubor", type=["txt", "json", "xml", "html"])
-        
-        if uploaded_file is not None:
-            if st.button("Zpracovat"):
-                with st.spinner("Probíhá zpracování souboru..."):
-                    result = process_uploaded_file(uploaded_file, language)
+                if result:
+                    st.success("Anonymizace byla úspěšně dokončena!")
                     
-                    if result["success"]:
-                        st.success("Soubor byl úspěšně zpracován")
-                        
-                        st.subheader("Anonymizovaný obsah")
-                        st.text_area("Výstup", result["anonymized_content"], height=200)
-                        
-                        # Tlačítko pro stažení výsledku
-                        st.download_button(
-                            label="Stáhnout anonymizovaný soubor",
-                            data=result["anonymized_content"],
-                            file_name=f"anonymized_{uploaded_file.name}",
-                            mime="text/plain"
-                        )
-                        
-                        # Zobrazení statistik
-                        st.subheader("Statistiky zpracování")
-                        display_stats(result["stats"])
-                        
-                        # Zobrazení metadat
-                        if "metadata" in result and result["metadata"]:
-                            st.subheader("Metadata")
-                            st.json(result["metadata"])
-                    else:
-                        st.error(result["error"])
-                        st.subheader("Statistiky zpracování")
-                        display_stats(result["stats"])
+                    col1, col2 = st.columns([3, 1])
+                    
+                    with col1:
+                        st.subheader("📄 Anonymizovaný text")
+                        st.text_area("Výstup", result["anonymized_text"], height=200, key="output")
+                    
+                    with col2:
+                        st.metric("⏱️ Doba zpracování", f"{result['processing_time_ms']:.1f} ms")
+                        st.metric("🔍 Nalezené entity", len(result["entities"]))
+                    
+                    # Tlačítko pro stažení
+                    st.download_button(
+                        label="📥 Stáhnout anonymizovaný text",
+                        data=result["anonymized_text"],
+                        file_name="anonymized_text.txt",
+                        mime="text/plain"
+                    )
+                    
+                    if show_entities:
+                        display_entities(result["entities"])
+                else:
+                    st.error("Anonymizace selhala. Zkontrolujte zadaný text a zkuste to znovu.")
     
     # O aplikaci
     else:
-        st.title("O aplikaci MedDocAI Anonymizer")
+        st.title("ℹ️ O aplikaci MedDocAI Anonymizer")
         
         st.markdown("""
-        ## MedDocAI Anonymizer
+        ## 🔒 MedDocAI Anonymizer
         
-        MedDocAI Anonymizer je specializovaný nástroj pro anonymizaci zdravotnické dokumentace v českém jazyce, vyvinutý společností STAPRO. Nástroj je navržen pro zpracování strukturovaných i nestrukturovaných zdravotnických textů s důrazem na ochranu osobních údajů pacientů v souladu s GDPR a dalšími regulacemi.
+        **Specializovaný nástroj pro anonymizaci zdravotnické dokumentace** vyvinutý pro ochranu osobních údajů pacientů v souladu s GDPR.
         
-        ### Klíčové funkce
+        ### ✨ Klíčové funkce
         
-        - **Detekce a anonymizace osobních údajů** v českých zdravotnických textech
-        - **Specializované rozpoznávače** pro české formáty (rodná čísla, čísla pojištěnců, adresy)
-        - **Specializované rozpoznávače** pro zdravotnické kódy a terminologii
-        - **Vlastní anonymizační operátory** zachovávající klinickou relevanci dokumentů
-        - **Dávkové a paralelní zpracování** pro efektivní zpracování velkého množství dat
-        - **Komplexní audit a monitoring** pro sledování a vyhodnocování procesu anonymizace
+        - 🔍 **Automatická detekce citlivých údajů** v zdravotnických textech
+        - 🇨🇿 **Podpora českého jazyka** s rozpoznáváním rodných čísel, adres a zdravotnické terminologie
+        - 🌐 **Mezinárodní podpora** pro anglické texty
+        - ⚡ **Rychlé zpracování** s detailními statistikami
+        - 🔒 **Bezpečná anonymizace** zachovávající klinickou relevanci
         
-        ### Typy rozpoznávaných entit
+        ### 🎯 Rozpoznávané entity
         
         #### Standardní entity
-        - `PERSON` - Jméno osoby
-        - `EMAIL_ADDRESS` - E-mailová adresa
-        - `PHONE_NUMBER` - Telefonní číslo
-        - `LOCATION` - Lokace
-        - `DATE_TIME` - Datum a čas
+        - 👤 **PERSON** - Jména osob
+        - 📧 **EMAIL_ADDRESS** - E-mailové adresy  
+        - 📞 **PHONE_NUMBER** - Telefonní čísla
+        - 📍 **LOCATION** - Lokace a adresy
+        - 📅 **DATE_TIME** - Datumy a časy
         
         #### České specializované entity
-        - `CZECH_BIRTH_NUMBER` - České rodné číslo
-        - `CZECH_HEALTH_INSURANCE_NUMBER` - Číslo pojištěnce
-        - `CZECH_DIAGNOSIS_CODE` - Kód diagnózy (MKN-10)
-        - `CZECH_MEDICAL_FACILITY` - Zdravotnické zařízení
-        - `CZECH_ADDRESS` - Česká adresa
+        - 🆔 **CZECH_BIRTH_NUMBER** - České rodné číslo
+        - 🏥 **CZECH_MEDICAL_FACILITY** - Zdravotnická zařízení
+        - 📋 **CZECH_DIAGNOSIS_CODE** - Kódy diagnóz (MKN-10)
+        - 🏠 **CZECH_ADDRESS** - České adresy
         
-        ### Kontakt a podpora
+        ### 🚀 Jak začít
         
-        Pro podporu a další informace kontaktujte:
-        - E-mail: support@stapro.cz
-        - Telefon: +420 XXX XXX XXX
+        1. Vyberte **"Anonymizace textu"** v menu
+        2. Zadejte nebo vyberte ukázkový text
+        3. Zvolte jazyk (doporučeno: angličtina pro lepší výsledky)
+        4. Klikněte na **"Anonymizovat"**
+        5. Stáhněte anonymizovaný výsledek
+        
+        ### ⚠️ Důležité poznámky
+        
+        - **Testovací verze**: Aplikace je v testovací fázi
+        - **Angličtina**: Pro nejlepší výsledky používejte anglické texty
+        - **Čeština**: Česká podpora je experimentální
+        - **Offline**: Všechna data se zpracovávají lokálně
+        
+        ### 📊 Technické informace
+        
+        - **Engine**: Microsoft Presidio
+        - **NLP**: spaCy s vlastními českými rozpoznávači
+        - **Bezpečnost**: Lokální zpracování bez odesílání dat
+        - **Výkon**: Optimalizováno pro texty do 10 000 znaků
+        
+        ### 🆘 Podpora
+        
+        Pro technickou podporu a dotazy kontaktujte vývojový tým.
+        
+        ---
+        
+        **© 2025 MedDocAI Anonymizer - Ochrana dat ve zdravotnictví**
         """)
 
 if __name__ == "__main__":

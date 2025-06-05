@@ -2,10 +2,10 @@ import logging
 from typing import List, Optional
 
 from presidio_analyzer import RecognizerRegistry
-from src.detection.recognizers.czech_birth_number_recognizer import CzechBirthNumberRecognizer
-from src.detection.recognizers.czech_health_insurance_recognizer import CzechHealthInsuranceNumberRecognizer
-from src.detection.recognizers.czech_diagnosis_code_recognizer import CzechMedicalDiagnosisCodeRecognizer
-from src.detection.recognizers.czech_medical_facility_recognizer import CzechMedicalFacilityRecognizer
+from czech_birth_number_recognizer import CzechBirthNumberRecognizer
+from czech_health_insurance_recognizer import CzechHealthInsuranceNumberRecognizer
+from czech_diagnosis_code_recognizer import CzechMedicalDiagnosisCodeRecognizer
+from czech_medical_facility_recognizer import CzechMedicalFacilityRecognizer
 
 # Nastavení loggeru
 logging.basicConfig(

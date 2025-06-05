@@ -5,10 +5,10 @@ from presidio_analyzer import AnalyzerEngine, RecognizerRegistry
 from presidio_analyzer.nlp_engine import NlpEngineProvider
 from presidio_anonymizer import AnonymizerEngine
 from presidio_anonymizer.entities import OperatorConfig
-from presidio_analyzer.analyzer_engine import RecognizerResult
+from presidio_analyzer.recognizer_result import RecognizerResult
 
-from src.common.models import Document, AnonymizedDocument, DetectedEntity, AnonymizedEntity
-from src.detection.recognizers.czech_registry import CzechRecognizerRegistry
+from document import Document, AnonymizedDocument, DetectedEntity, AnonymizedEntity
+from czech_registry import CzechRecognizerRegistry
 
 # Nastavení loggeru
 logging.basicConfig(
@@ -26,8 +26,8 @@ class PresidioService:
         """
         Inicializace služby Presidio.
         """
-        # Inicializace NLP enginu (spaCy)
-        # Použití pouze anglického modelu jako fallback, protože český model není dostupný pro spaCy 3.8.7
+        # Inicializace NLP enginu (spaCy) - pouze anglický model
+        # Český model způsobuje problémy s PyTorch kompatibilitou
         nlp_configuration = {
             "nlp_engine_name": "spacy",
             "models": [
@@ -36,33 +36,27 @@ class PresidioService:
         }
         self.nlp_engine = NlpEngineProvider(nlp_configuration=nlp_configuration).create_engine()
         
-        # Inicializace registru rozpoznávačů
-        self.registry = RecognizerRegistry()
+        # Inicializace analyzeru s výchozími rozpoznávači
+        self.analyzer = AnalyzerEngine(nlp_engine=self.nlp_engine)
         
         # Registrace specializovaných českých rozpoznávačů
-        CzechRecognizerRegistry.register_czech_recognizers(self.registry)
-        
-        # Inicializace analyzeru
-        self.analyzer = AnalyzerEngine(
-            nlp_engine=self.nlp_engine,
-            registry=self.registry
-        )
+        CzechRecognizerRegistry.register_czech_recognizers(self.analyzer.registry)
         
         # Inicializace anonymizeru
         self.anonymizer = AnonymizerEngine()
         
         logger.info("Presidio service initialized with English model (fallback) and Czech recognizers")
     
-    def analyze_text(self, text: str, language: str = "en") -> List[DetectedEntity]:
+    def analyze_text(self, text: str, language: str = "cs") -> tuple[List[DetectedEntity], List[RecognizerResult]]:
         """
         Analyzuje text a detekuje entity.
         
         Args:
             text: Text k analýze
-            language: Jazyk textu (výchozí: angličtina jako fallback)
+            language: Jazyk textu (výchozí: čeština)
             
         Returns:
-            Seznam detekovaných entit
+            Tuple obsahující seznam detekovaných entit a původní výsledky analyzeru
         """
         logger.info(f"Analyzing text (length: {len(text)}) using language: {language}")
         
@@ -87,18 +81,19 @@ class PresidioService:
                 end=result.end,
                 score=result.score,
                 text=text[result.start:result.end],
-                context=self._get_context(text, result.start, result.end)
+                context=self._get_context(text, result.start, result.end),
+                metadata={}
             )
             detected_entities.append(entity)
         
         logger.info(f"Detected {len(detected_entities)} entities")
-        return detected_entities, results  # Vracíme i původní výsledky pro anonymizaci
+        return detected_entities, results
     
     def anonymize_text(
         self, 
         text: str, 
         entities: List[DetectedEntity],
-        analyzer_results: List[RecognizerResult]
+        analyzer_results
     ) -> tuple[str, List[AnonymizedEntity]]:
         """
         Anonymizuje text na základě detekovaných entit.
@@ -158,6 +153,7 @@ class PresidioService:
         
         # Vytvoření anonymizovaného dokumentu
         anonymized_document = AnonymizedDocument(
+            id=f"anon_{document.id}" if document.id else None,
             content=anonymized_text,
             content_type=document.content_type,
             original_document_id=document.id,
