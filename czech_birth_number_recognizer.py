@@ -28,7 +28,7 @@ class CzechBirthNumberRecognizer(EntityRecognizer):
         super().__init__(
             supported_entities=[supported_entity],
             name=name,
-            supported_language=supported_language,
+            supported_language=[supported_language, "en"],  # Podpora češtiny i angličtiny
         )
         
         # Regulární výraz pro české rodné číslo
