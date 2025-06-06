@@ -28,3 +28,9 @@ pytest>=7.0.0
 pytest-asyncio
 requests
 black>=23.0.0
+
+# Additional dependencies for new features
+python-multipart>=0.0.6  # For FastAPI file uploads
+aiofiles>=23.0.0  # Async file operations
+python-jose[cryptography]>=3.3.0  # JWT handling (for future auth)
+python-decouple>=3.8  # Environment variable management

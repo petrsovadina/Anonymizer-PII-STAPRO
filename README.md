@@ -2,32 +2,55 @@
 
 **Specializovaný nástroj pro anonymizaci osobních údajů v zdravotnických dokumentech**
 
-## ✅ Status: PLNĚ FUNKČNÍ
+## ✅ Status: PLNĚ FUNKČNÍ & MODULÁRNÍ
 
-**Poslední aktualizace**: 6.6.2025  
-**Verze**: Production Ready  
+**Poslední aktualizace**: 7.6.2025  
+**Verze**: Production Ready v2.0  
+**Architektura**: Modulární, kontejnerizovatelná  
 **Testováno**: Všechny komponenty ✓  
 
 ## 🚀 Rychlé spuštění
 
+### Streamlit Web App
 ```bash
-# Spuštění aplikace
-streamlit run app.py
+# Spuštění webové aplikace
+python run_app.py
+# nebo
+make app
 
 # Otevřete prohlížeč na
-http://localhost:8502
+http://localhost:8501
 ```
 
-**Alternativní spuštění:**
+### REST API Server
 ```bash
-python run_app.py  # Bez PyTorch warnings
+# Spuštění REST API
+python run_api.py
+# nebo  
+make api
+
+# API endpoint
+http://localhost:8502
+# Swagger dokumentace
+http://localhost:8502/docs
+```
+
+### Docker Container
+```bash
+# Build a spuštění
+make docker-build
+make docker-run
+
+# nebo pomocí docker-compose
+make docker-compose-up
 ```
 
 ## 📋 Požadavky
 
-- **Python**: 3.8+
+- **Python**: 3.11+
 - **RAM**: 4+ GB 
-- **spaCy model**: en_core_web_sm (automaticky nainstalován)
+- **spaCy model**: cs_core_news_sm (automaticky nainstalován)
+- **Docker**: Pro kontejnerizaci (volitelné)
 
 ## 🔧 Instalace
 
@@ -96,19 +119,61 @@ Output: "<PERSON>, SSN <US_SSN>, email <EMAIL_ADDRESS>"
                        └─────────────────┘
 ```
 
-## 📁 Klíčové soubory
+## 📁 Struktura projektu
 
 ```
-├── app.py                     # 📱 Streamlit aplikace
-├── presidio_service.py        # 🔧 Anonymizační služba
-├── czech_registry.py          # 🇨🇿 České rozpoznávače
-├── run_app.py                 # 🚀 Alternativní spouštěč
-├── requirements.txt           # 📋 Závislosti
-├── PYTORCH_FIX_README.md     # 🔧 Technické řešení
-└── FINAL_VERIFICATION_CHECKLIST.md  # ✅ Kontrolní seznam
+Anonymizer-PII-STAPRO/
+├── 📱 HLAVNÍ APLIKACE
+│   ├── app.py                          # Streamlit UI
+│   ├── presidio_service.py             # Jádro anonymizační služby
+│   ├── document.py                     # Datové modely
+│   ├── czech_registry.py               # Registr českých rozpoznávačů
+│   ├── run_app.py                      # Alternativní spouštěč
+│   └── batch_processor.py              # Dávkové zpracování
+│
+├── 🇨🇿 ČESKÉ ROZPOZNÁVAČE
+│   ├── czech_birth_number_recognizer.py    # Rodná čísla
+│   ├── czech_health_insurance_recognizer.py # Zdravotní pojištění
+│   ├── czech_diagnosis_code_recognizer.py   # Kódy diagnóz
+│   ├── czech_medical_facility_recognizer.py # Zdravotnická zařízení
+│   ├── czech_address_recognizer.py          # České adresy
+│   └── czech_*_operator.py                 # Operátory pro anonymizaci
+│
+├── 🧪 TESTY
+│   └── tests/
+│       ├── test_presidio_service.py     # Testy hlavní služby
+│       ├── test_czech_recognizers.py    # Testy českých rozpoznávačů
+│       ├── test_document_models.py      # Testy datových modelů
+│       ├── test_integration.py          # Integrační testy
+│       └── fixtures/                   # Testovací data
+│
+├── 📁 ADRESÁŘE
+│   ├── czech_model/                    # České NLP modely
+│   ├── exports/                        # Exportované výsledky
+│   ├── logs/                          # Aplikační logy
+│   └── uploads/                       # Nahrané soubory
+│
+├── 📚 DOKUMENTACE
+│   ├── PRD/                           # Produktová dokumentace
+│   └── README.md                      # Hlavní dokumentace
+│
+└── ⚙️ KONFIGURACE
+    └── requirements.txt               # Python závislosti
 ```
 
 ## 🧪 Testování
+
+### Spuštění testů
+```bash
+# Všechny testy
+pytest tests/
+
+# Specifické testy
+pytest tests/test_presidio_service.py
+pytest tests/test_czech_recognizers.py
+pytest tests/test_document_models.py
+pytest tests/test_integration.py
+```
 
 ### Rychlý test
 ```bash
@@ -126,6 +191,7 @@ print(f'Nalezeno {len(result[0])} entit')
 - ✅ **Anglické entity**: Funkční detekce  
 - ✅ **Streamlit UI**: Bez chyb
 - ✅ **Performance**: ~140ms průměr
+- ✅ **Test Suite**: Komprehenzivní testy v tests/
 
 ## 🚨 Řešení problémů
 
@@ -159,9 +225,10 @@ streamlit run app.py --server.port 8503
 
 ## 📚 Dokumentace
 
-- `PYTORCH_FIX_README.md` - Technické řešení PyTorch problémů
-- `FINAL_VERIFICATION_CHECKLIST.md` - Kompletní kontrolní seznam
-- `PRD/` - Rozšířená dokumentace
+- `PRD/installation_guide.md` - Instalační návod
+- `PRD/user_guide.md` - Uživatelský manuál
+- `PRD/deployment_guide.md` - Nasazení do produkce
+- `PRD/testing_and_optimization.md` - Testování a optimalizace
 
 ## 🆘 Podpora
 

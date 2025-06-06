@@ -1,0 +1,3 @@
+"""
+Dokumentace pro MedDocAI Anonymizer.
+"""
