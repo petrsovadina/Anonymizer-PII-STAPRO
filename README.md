@@ -229,6 +229,7 @@ streamlit run app.py --server.port 8503
 - `PRD/user_guide.md` - Uživatelský manuál
 - `PRD/deployment_guide.md` - Nasazení do produkce
 - `PRD/testing_and_optimization.md` - Testování a optimalizace
+- `docs/ROADMAP.md` - Plánovaný vývoj projektu (Roadmap)
 
 ## 🆘 Podpora
 
