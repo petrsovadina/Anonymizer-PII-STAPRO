@@ -1,6 +1,13 @@
 import pytest
 import requests
 from fastapi.testclient import TestClient
+import sys
+from pathlib import Path
+
+# Přidání kořenového adresáře projektu do sys.path
+# /app/tests/test_anonymize.py -> /app
+root_path = Path(__file__).parent.parent
+sys.path.append(str(root_path))
 
 from src.api.main import app
 from src.common.models import Document, DocumentType
