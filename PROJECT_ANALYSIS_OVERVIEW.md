@@ -75,7 +75,7 @@
 **8. Vývojová fáze a možná budoucí roadmapa:**
 
 *   **Aktuální fáze:** Produkčně připravená verze 2.0. Systém je stabilní a funkční.
-*   **Roadmapa:** Není explicitně definována v analyzovaném kódu. Možné budoucí směry:
+*   **Roadmapa:** Podrobná roadmapa projektu je definována v samostatném dokumentu [ROADMAP.md](docs/ROADMAP.md). Klíčové možné budoucí směry zahrnují:
     *   Údržba, opravy chyb.
     *   Optimalizace výkonu a správy zdrojů.
     *   Přidání nových rozpoznávačů pro další typy citlivých dat nebo pro jiné jazyky.
