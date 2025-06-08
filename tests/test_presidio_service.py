@@ -2,8 +2,16 @@
 Testy pro PresidioService - hlavní anonymizační službu
 """
 import pytest
-from presidio_service import PresidioService
-from document import Document, DocumentType, ProcessingStatus
+import sys
+from pathlib import Path
+
+# Přidání kořenového adresáře projektu do sys.path
+# /app/tests/test_presidio_service.py -> /app
+root_path = Path(__file__).parent.parent
+sys.path.append(str(root_path))
+
+from services.presidio_service import PresidioService
+from models.document import Document, DocumentType, ProcessingStatus
 
 
 class TestPresidioService:

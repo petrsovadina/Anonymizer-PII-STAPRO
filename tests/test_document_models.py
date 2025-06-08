@@ -2,7 +2,15 @@
 Testy pro datové modely dokumentů
 """
 import pytest
-from document import (
+import sys
+from pathlib import Path
+
+# Přidání kořenového adresáře projektu do sys.path
+# /app/tests/test_document_models.py -> /app
+root_path = Path(__file__).parent.parent
+sys.path.append(str(root_path))
+
+from models.document import (
     Document, AnonymizedDocument, DetectedEntity, AnonymizedEntity,
     DocumentType, ProcessingStatus
 )
